@@ -1,0 +1,46 @@
+{
+  "name": "@theopenbee/channel-wecom",
+  "version": "0.1.0",
+  "description": "WeCom channel plugin for openbee",
+  "keywords": [
+    "openbee",
+    "openbee-plugin",
+    "wecom"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/theopenbee/channel-wecom.git"
+  },
+  "homepage": "https://github.com/theopenbee/channel-wecom#readme",
+  "bugs": {
+    "url": "https://github.com/theopenbee/channel-wecom/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "files": [
+    "dist",
+    "openbee.plugin.json"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --test test/*.test.mjs",
+    "prepare": "npm run build"
+  },
+  "dependencies": {
+    "@theopenbee/channel-sdk": "^0.2.0",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/ws": "^8.18.2",
+    "typescript": "^5.7.0"
+  }
+}

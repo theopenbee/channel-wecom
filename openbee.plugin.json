@@ -1,0 +1,39 @@
+{
+  "protocol_version": 1,
+  "id": "wecom",
+  "name": { "en": "WeCom", "zh": "企业微信" },
+  "description": { "en": "WeCom AI bot channel", "zh": "企业微信智能机器人渠道" },
+  "command": ["node", "dist/index.js"],
+  "config": [
+    {
+      "key": "bot_id",
+      "type": "string",
+      "required": true,
+      "label": { "en": "Bot ID", "zh": "Bot ID" },
+      "help": {
+        "en": "Bot ID of the WeCom AI bot (API mode, long connection)",
+        "zh": "企业微信智能机器人（API 模式，长连接）的 Bot ID"
+      }
+    },
+    {
+      "key": "secret",
+      "type": "secret",
+      "required": true,
+      "label": { "en": "Secret", "zh": "Secret" },
+      "help": {
+        "en": "Secret of the WeCom AI bot, shown next to the Bot ID",
+        "zh": "企业微信智能机器人的 Secret，与 Bot ID 一同显示"
+      }
+    },
+    {
+      "key": "websocket_url",
+      "type": "string",
+      "default": "wss://openws.work.weixin.qq.com",
+      "label": { "en": "WebSocket URL (advanced)", "zh": "WebSocket 地址（高级）" },
+      "help": {
+        "en": "Change only for a proxy or a test server",
+        "zh": "仅在使用代理或测试服务器时修改"
+      }
+    }
+  ]
+}
