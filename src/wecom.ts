@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { basename } from "node:path";
+import { basename, join } from "node:path";
 
 import { ConfigError, type Attachment, type ChannelContext, type ChannelDefinition, type SendRequest } from "@theopenbee/channel-sdk";
 
@@ -37,6 +37,7 @@ import {
 import { AckError, DEFAULT_CONN_TIMINGS, SubscribeError, WsConn, type ConnTimings } from "./wsconn.js";
 
 export const DEFAULT_WEBSOCKET_URL = "wss://openws.work.weixin.qq.com";
+export const PENDING_STREAMS_FILE = "pending-streams.json";
 
 export interface Timings extends ConnTimings {
   pendingStreamTtl: number;
@@ -257,7 +258,11 @@ export function createWeComChannel(overrides: Partial<Timings> = {}): ChannelDef
   return {
     async start(ctx) {
       const cfg = readConfig(ctx.config);
-      streams = new PendingStreams(timings.pendingStreamTtl);
+      const loaded = PendingStreams.load(timings.pendingStreamTtl, join(ctx.dataDir, PENDING_STREAMS_FILE), (err) =>
+        ctx.log.warn("wecom: cannot save pending streams", { error: errorText(err) }),
+      );
+      if (loaded.problem) ctx.log.warn("wecom: cannot read pending streams, starting with none", { error: loaded.problem });
+      streams = loaded.streams;
       const ws = new WsConn({
         ...timings,
         url: cfg.websocketUrl,
@@ -282,7 +287,7 @@ export function createWeComChannel(overrides: Partial<Timings> = {}): ChannelDef
       return {
         stop: async () => {
           await ws.close();
-          streams?.clear();
+          streams?.dispose();
         },
       };
     },

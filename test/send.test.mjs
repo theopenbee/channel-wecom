@@ -1,11 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { BOT_ID, pngBytes, startFakeWeCom } from "./fake-wecom.mjs";
-import { initialized, send } from "./harness.mjs";
+import { initialized, send, setup } from "./harness.mjs";
 
 let seq = 0;
 function body(overrides = {}) {
@@ -61,6 +61,24 @@ test("text replies finish the thinking stream", async (t) => {
   assert.equal(second.headers.req_id, reqId);
   assert.notEqual(second.body.stream.id, streamId);
   assert.match(second.body.stream.id, /^stream-\d+-[0-9a-f]{8}$/);
+});
+
+test("a reply after a plugin restart finishes the original thinking stream", async (t) => {
+  const fake = await startFakeWeCom();
+  t.after(() => fake.close());
+  const dirs = setup();
+  const first = await initialized(t, fake, { dirs });
+  const { reqId, inbound, streamId } = await receive(fake, first.p);
+  first.p.child.stdin.end();
+  assert.equal(await first.p.exited, 0);
+
+  const second = await initialized(t, fake, { dirs });
+  const mark = fake.frames.length;
+  await send(second.p, { chat_id: inbound.chat_id, reply_to: { message_id: inbound.message_id, raw: inbound.raw }, content: "after restart" });
+  const [reply] = framesAfter(fake, mark);
+  assert.equal(reply.headers.req_id, reqId);
+  assert.deepEqual(reply.body, { msgtype: "stream", stream: { id: streamId, finish: true, content: "after restart" } });
+  assert.deepEqual(JSON.parse(readFileSync(join(dirs.dataDir, "pending-streams.json"), "utf8")), {});
 });
 
 test("a rejected stream reply is sent as a new message", async (t) => {

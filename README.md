@@ -6,7 +6,7 @@ WeCom (企业微信) AI bot channel for openbee, built on [`@theopenbee/channel-
 
 - Uses the AI bot long connection (WebSocket), so openbee needs no public address or callback URL. A heartbeat runs every 30 seconds; after a dropped connection the plugin reconnects and subscribes again, waiting 1 s, doubling up to 30 s, for as long as it takes.
 - Private and group chats. One openbee session per chat and user (`wecom:<chat>:<user>`, where the chat is the group's `chatid` or the user's `userid` in private chats), as before.
-- As soon as a message arrives the bot shows an empty "thinking" stream; the reply completes that stream. Streams nobody answers are forgotten after 10 minutes.
+- As soon as a message arrives the bot shows an empty "thinking" stream; the reply completes that stream. Open streams are kept in the plugin data directory, so a reply sent after openbee restarts still completes them. Streams nobody answers are forgotten after 10 minutes.
 - Text, voice (WeCom's transcript), images, files and mixed text-and-image messages are handled. Quoted messages are appended: their text after the message text, their images and files after the message's own. Media up to 100 MiB is downloaded, decrypted with the message's AES key and saved into openbee's media directory, with the file type detected from the content.
 - If WeCom refuses the stream reply (for example because the reply window has passed), the text is sent as a new markdown message instead. Scheduled results and other proactive messages are sent as markdown messages to the chat.
 - Text longer than 20,000 bytes is split, preferring line breaks; the first part completes the stream, the rest follows as markdown messages. Text is sent first, then the file.

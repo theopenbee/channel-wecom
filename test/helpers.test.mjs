@@ -1,5 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import {
   PendingStreams,
@@ -156,6 +159,36 @@ test("PendingStreams hands out a stream once and expires it", async () => {
   await new Promise((r) => setTimeout(r, 60));
   assert.equal(streams.take("m2"), undefined);
   streams.set("m3", "s3");
-  streams.clear();
+  streams.dispose();
   assert.equal(streams.size, 0);
+});
+
+test("PendingStreams survive a restart through their file", async () => {
+  const file = join(mkdtempSync(join(tmpdir(), "wecom-streams-")), "pending-streams.json");
+  const first = PendingStreams.load(60_000, file).streams;
+  first.set("m1", "s1");
+  first.set("m2", "s2");
+  first.take("m2");
+  first.dispose();
+  assert.equal(statSync(file).mode & 0o777, 0o600);
+
+  const second = PendingStreams.load(60_000, file);
+  assert.equal(second.problem, undefined);
+  assert.equal(second.streams.size, 1);
+  assert.equal(second.streams.take("m1"), "s1");
+  second.streams.dispose();
+  assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), {});
+
+  writeFileSync(file, JSON.stringify({ old: { stream_id: "s0", expires_at: Date.now() - 1 }, bad: { stream_id: 1 }, live: { stream_id: "s9", expires_at: Date.now() + 50 } }));
+  const third = PendingStreams.load(60_000, file).streams;
+  assert.equal(third.size, 1);
+  await new Promise((r) => setTimeout(r, 80));
+  assert.equal(third.size, 0);
+  assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), {});
+
+  writeFileSync(file, "{not json");
+  const broken = PendingStreams.load(60_000, file);
+  assert.equal(broken.streams.size, 0);
+  assert.ok(broken.problem);
+  assert.equal(PendingStreams.load(60_000, join(tmpdir(), "missing-dir-for-wecom", "x.json")).problem, undefined);
 });
