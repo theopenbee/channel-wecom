@@ -17,12 +17,13 @@ import {
   fileSentText,
   generateReqId,
   parseRaw,
+  retryWithBackoff,
   splitText,
   str,
   streamBody,
   type ReplyTarget,
 } from "./helpers.js";
-import { MAX_DOWNLOAD_SIZE, SUPPORTED_MSG_TYPES, extractContent, fetchMedia, type Downloader } from "./inbound.js";
+import { DownloadTooLargeError, MAX_DOWNLOAD_SIZE, SUPPORTED_MSG_TYPES, extractContent, fetchMedia, type Downloader } from "./inbound.js";
 import { CHUNK_SIZE, detectMime, extensionFromMime, resolveMediaType, type WeComMediaType } from "./mime.js";
 import {
   CMD_RESPOND,
@@ -42,12 +43,16 @@ export const PENDING_STREAMS_FILE = "pending-streams.json";
 export interface Timings extends ConnTimings {
   pendingStreamTtl: number;
   downloadTimeout: number;
+  downloadAttempts: number;
+  downloadRetryDelay: number;
 }
 
 export const DEFAULT_TIMINGS: Timings = {
   ...DEFAULT_CONN_TIMINGS,
   pendingStreamTtl: 10 * 60_000,
   downloadTimeout: 120_000,
+  downloadAttempts: 3,
+  downloadRetryDelay: 500,
 };
 
 interface WeComConfig {
@@ -98,7 +103,15 @@ export function createWeComChannel(overrides: Partial<Timings> = {}): ChannelDef
       const url = media.url ?? "";
       if (!url) return { type: kind, path: "" };
       try {
-        let data: Buffer = await fetchMedia(url, MAX_DOWNLOAD_SIZE, timings.downloadTimeout);
+        let data: Buffer = await retryWithBackoff(() => fetchMedia(url, MAX_DOWNLOAD_SIZE, timings.downloadTimeout), {
+          attempts: timings.downloadAttempts,
+          delay: timings.downloadRetryDelay,
+          shouldRetry: (err) => {
+            if (err instanceof DownloadTooLargeError) return false;
+            ctx.log.warn("wecom media download failed, retrying", { type: kind, error: errorText(err) });
+            return true;
+          },
+        });
         if (media.aeskey) data = decryptFile(data, media.aeskey);
         const path = await ctx.saveMedia(data, extensionFromMime(detectMime(data)));
         return { type: kind, path };

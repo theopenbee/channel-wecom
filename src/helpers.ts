@@ -22,6 +22,25 @@ export function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+export interface RetryOptions {
+  attempts: number;
+  delay: number;
+  shouldRetry: (err: unknown) => boolean;
+}
+
+export async function retryWithBackoff<T>(fn: () => Promise<T>, { attempts, delay, shouldRetry }: RetryOptions): Promise<T> {
+  let wait = delay;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (attempt >= attempts || !shouldRetry(err)) throw err;
+    }
+    await new Promise((resolve) => setTimeout(resolve, wait));
+    wait *= 2;
+  }
+}
+
 export function chatIdOf(body: Pick<MessageBody, "chattype" | "chatid" | "from">): string {
   return body.chattype === "group" ? str(body.chatid) : str(asObject(body.from)?.userid);
 }

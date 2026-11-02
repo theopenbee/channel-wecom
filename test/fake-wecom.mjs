@@ -99,7 +99,16 @@ export async function startFakeWeCom(handlers = {}) {
 
 export async function startMediaServer() {
   const files = new Map();
+  const drops = new Map();
+  const requests = [];
   const server = createServer((req, res) => {
+    requests.push(req.url);
+    const left = drops.get(req.url) ?? 0;
+    if (left > 0) {
+      drops.set(req.url, left - 1);
+      req.socket.destroy();
+      return;
+    }
     const data = files.get(req.url);
     if (!data) {
       res.writeHead(404);
@@ -114,6 +123,10 @@ export async function startMediaServer() {
   const base = `http://127.0.0.1:${port}`;
   return {
     url: (path) => `${base}${path}`,
+    drop(path, times) {
+      drops.set(path, times);
+    },
+    requestsFor: (path) => requests.filter((r) => r === path).length,
     add(path, data) {
       files.set(path, data);
       return `${base}${path}`;

@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname } from "node:path";
 
+import { MAX_DOWNLOAD_SIZE } from "../dist/inbound.js";
 import { BOT_ID, encryptMedia, pngBytes, startFakeWeCom, startMediaServer } from "./fake-wecom.mjs";
 import { initialized } from "./harness.mjs";
 
@@ -23,14 +24,14 @@ function body(overrides = {}) {
   };
 }
 
-async function env(t) {
+async function env(t, options) {
   const fake = await startFakeWeCom();
   const media = await startMediaServer();
   t.after(async () => {
     await fake.close();
     await media.close();
   });
-  const { p, dirs } = await initialized(t, fake);
+  const { p, dirs } = await initialized(t, fake, options);
   return { fake, media, p, dirs };
 }
 
@@ -203,4 +204,41 @@ test("a failed thinking stream does not block the message", async (t) => {
   await p.waitInbound((m) => m.message_id === b.msgid);
   const warn = p.logs("warn").find((l) => l.message === "wecom: failed to send thinking message");
   assert.match(warn.fields.error, /ack error: code=846605 msg=invalid req_id/);
+});
+
+const FAST_RETRY = { timings: { downloadRetryDelay: 5 } };
+const retryLogs = (p) => p.logs("warn").filter((l) => l.message === "wecom media download failed, retrying");
+
+test("a dropped download is retried until the image arrives", async (t) => {
+  const { fake, media, p, dirs } = await env(t, FAST_RETRY);
+  const png = pngBytes(500);
+  const img = body({ msgtype: "image", text: undefined, image: encrypted(media, "/flaky", png) });
+  media.drop("/flaky", 2);
+  fake.callback(img);
+  const msg = await p.waitInbound((m) => m.message_id === img.msgid);
+  assertSaved(msg.attachments[0], dirs, "image", ".png", png);
+  assert.equal(media.requestsFor("/flaky"), 3);
+  assert.equal(retryLogs(p).length, 2);
+});
+
+test("a download that keeps failing stops after three attempts", async (t) => {
+  const { fake, media, p } = await env(t, FAST_RETRY);
+  const img = body({ msgtype: "image", text: undefined, image: { url: media.url("/gone"), aeskey: "" } });
+  fake.callback(img);
+  const msg = await p.waitInbound((m) => m.message_id === img.msgid);
+  assert.deepEqual(msg.attachments, [{ type: "image", path: "" }]);
+  assert.equal(media.requestsFor("/gone"), 3);
+});
+
+test("oversized downloads and wrong keys are not retried", async (t) => {
+  const { fake, media, p } = await env(t, FAST_RETRY);
+  const huge = body({ msgtype: "file", text: undefined, file: { url: media.add("/huge", Buffer.alloc(MAX_DOWNLOAD_SIZE + 1)), aeskey: "" } });
+  const wrongKey = body({ msgtype: "file", text: undefined, file: { url: media.add("/locked", encryptMedia(pngBytes(100), randomBytes(32))), aeskey: randomBytes(16).toString("base64") } });
+  fake.callback(huge);
+  fake.callback(wrongKey);
+  assert.deepEqual((await p.waitInbound((m) => m.message_id === huge.msgid, 15000)).attachments, [{ type: "document", path: "" }]);
+  assert.deepEqual((await p.waitInbound((m) => m.message_id === wrongKey.msgid)).attachments, [{ type: "document", path: "" }]);
+  assert.equal(media.requestsFor("/huge"), 1);
+  assert.equal(media.requestsFor("/locked"), 1);
+  assert.equal(retryLogs(p).length, 0);
 });

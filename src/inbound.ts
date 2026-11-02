@@ -6,6 +6,13 @@ import type { EncryptedMedia, MessageBody, MixedContent, QuoteContent } from "./
 export const MAX_DOWNLOAD_SIZE = 100 * 1024 * 1024;
 export const SUPPORTED_MSG_TYPES = new Set(["text", "voice", "image", "file", "mixed"]);
 
+export class DownloadTooLargeError extends Error {
+  constructor(maxBytes: number) {
+    super(`download too large: more than ${maxBytes} bytes`);
+    this.name = "DownloadTooLargeError";
+  }
+}
+
 export type MediaKind = "image" | "document";
 
 export type Downloader = (media: EncryptedMedia, kind: MediaKind) => Promise<Attachment>;
@@ -116,7 +123,7 @@ export async function fetchMedia(url: string, maxBytes: number, timeoutMs: numbe
   let size = 0;
   for await (const chunk of res.body) {
     size += chunk.byteLength;
-    if (size > maxBytes) throw new Error(`download too large: more than ${maxBytes} bytes`);
+    if (size > maxBytes) throw new DownloadTooLargeError(maxBytes);
     chunks.push(chunk);
   }
   return Buffer.concat(chunks);
