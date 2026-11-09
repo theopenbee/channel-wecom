@@ -23,6 +23,8 @@ WeCom (企业微信) AI bot channel for openbee, built on [`@theopenbee/channel-
 
 ## Install
 
+Install it from **Settings → Plugins → Marketplace**, or run:
+
 ```sh
 openbee plugin install @theopenbee/channel-wecom
 ```
@@ -36,17 +38,9 @@ npm install
 openbee plugin install "$(pwd)"
 ```
 
-Then enable it with `openbee config`, or add it to `config.yaml` and restart openbee. A config written for the built-in channel works unchanged:
+Then fill in its settings and enable it under **Settings → Plugins** in the desktop app or the web console, or run `openbee plugin configure wecom`. Setup guide: https://theopenbee.com/docs/chat-apps/wecom/
 
-```yaml
-bee:
-  platforms:
-    wecom:
-      enabled: true
-      bot_name: OpenBee
-      bot_id: "<bot id>"
-      secret: "<secret>"
-```
+Settings, also accepted as `openbee plugin configure wecom --set key=value`:
 
 | Key | Default | |
 |---|---|---|
